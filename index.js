@@ -1,5 +1,4 @@
-javascript:(async function(){
-  try{
+try{
     const RAW='RAW_URL_HERE';
     const res = await fetch(RAW,{cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
