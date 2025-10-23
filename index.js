@@ -1,46 +1,36 @@
-javascript:(function(){
-  var src = "function ready(){\n  var clicked = false;\n\n  alert('Click somewhere on the popup to remove it.\\n You may need to try a few different positions, be sure to click the bookmark before each attempt.\\n Good places to try include blank spaces or the area around the popup itself.');\n\n  document.addEventListener('click', function handler(e) {\n    if (clicked == false) {\n      e.preventDefault();\n      e.stopPropagation();\n\n      const el = e.target;\n      if (el.id != ''){\n        console.log('ID:', el.id);\n        document.getElementsByName(el.id)[0].setAttribute('style', 'visibility: hidden;');\n      } else {\n        console.log('Class:', el.className);\n        document.getElementsByClassName(el.className).setAttribute('style', 'visibility: hidden;');\n      }\n      document.getElementsByTagName('body')[0].removeAttribute('style');\n\n      clicked = true;\n    };\n  }, true);\n\n};\n\nready();";
-
-  function runIn(doc){
-    try{ (0, doc.defaultView.eval)(src); return true; }
-    catch(e){
-      try{
-        var s = doc.createElement('script'); s.type='text/javascript'; s.text=src;
-        (doc.head||doc.documentElement).appendChild(s); s.remove();
-        return true;
-      }catch(_){ return false; }
-    }
-  }
-
-  // try to inject into same-origin iframes
-  var injected = false;
+javascript:(async function(){
   try{
-    for(var i=0;i<window.frames.length;i++){
-      try{ injected = runIn(window.frames[i].document) || injected; }catch(_){}
+    const RAW='RAW_URL_HERE';
+    const res = await fetch(RAW,{cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const txt = await res.text();
+
+    // Build a list of same-origin documents: top + iframes we can access
+    const docs = [{ label: 'top: ' + location.href, doc: document }];
+    for (let i=0;i<window.frames.length;i++){
+      try{
+        const w = window.frames[i];
+        // Access will throw on cross-origin frames; we skip those
+        void w.document; void w.location.href;
+        docs.push({ label: 'frame['+i+']: ' + (w.location.href || 'about:blank'), doc: w.document });
+      }catch(_) {}
     }
-  }catch(_){}
 
-  // also try top document (in case the popup is not in a frame)
-  try{ injected = runIn(document) || injected; }catch(_){}
+    // Let you pick the exact context (like switching context in DevTools)
+    let idx = 0;
+    if(docs.length > 1){
+      const menu = docs.map((d,i)=> i+': '+d.label).join('\n');
+      const input = prompt(
+        'Pick frame to run the code in (like DevTools context):\n' + menu + '\n\nDefault 0 = top page',
+        '0'
+      );
+      const n = parseInt(input,10);
+      if (!isNaN(n) && n>=0 && n<docs.length) idx = n;
+    }
 
-  // Fallback: if nothing could be injected (likely cross-origin iframe),
-  // use a one-time overlay that hides the topmost element at the click point.
-  if(!injected){
-    alert('Click the popup. If it is inside a cross-origin iframe, this will hide the iframe element itself.');
-    var ov=document.createElement('div');
-    ov.style.position='fixed'; ov.style.inset='0'; ov.style.zIndex='2147483647';
-    ov.style.background='transparent'; ov.style.cursor='crosshair';
-    document.documentElement.appendChild(ov);
-    ov.addEventListener('click',function(ev){
-      ev.preventDefault(); ev.stopPropagation();
-      ov.style.pointerEvents='none';
-      var el=document.elementFromPoint(ev.clientX,ev.clientY);
-      ov.remove();
-      if(el){
-        try{ el.style.setProperty('visibility','hidden','important'); }catch(_){}
-        if(document.body){ try{ document.body.removeAttribute('style'); }catch(_){ } }
-      }
-    },{once:true,capture:true});
+    // Execute your code exactly as-is in the chosen document
+    (0, docs[idx].doc.defaultView.eval)(txt);
+  }catch(e){
+    alert('Bookmarklet error: ' + (e && e.message ? e.message : e));
   }
-  undefined;
-})();
+})();void 0;
